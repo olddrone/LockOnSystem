@@ -9,11 +9,12 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "UObject/ConstructorHelpers.h"
+#include "Net/UnrealNetwork.h"
 
 ULockOnComponent::ULockOnComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
-	SetIsReplicatedByDefault(true);
+	SetIsReplicatedByDefault(true);   
 	
 	static ConstructorHelpers::FClassFinder<UUserWidget> WidgetBPClass(TEXT("/LockOnSystem/WBP_LockOn.WBP_LockOn_C"));
 	if (WidgetBPClass.Succeeded())
@@ -76,8 +77,7 @@ void ULockOnComponent::LockOff()
 		TargetActor = nullptr;
 		bIsLockOn = false;
 
-		if (bControlRotation)
-			ControlRotation(false);
+		ControlRotation(false);
 		if (IsValid(Controller))
 			Controller->ResetIgnoreLookInput();
 
@@ -203,27 +203,6 @@ bool ULockOnComponent::CheckTargetOutOfSight() const
 	return true;
 }
 
-void ULockOnComponent::ControlRotation(const bool bInControlRotation)
-{
-	if (!IsValid(Owner) || !Owner->IsLocallyControlled())
-		return;
-
-	ServerControlRotation(bInControlRotation);
-}
-
-void ULockOnComponent::ServerControlRotation_Implementation(const bool bInControlRotation)
-{
-	MulticastControlRotation(bInControlRotation);
-}
-
-void ULockOnComponent::MulticastControlRotation_Implementation(const bool bInControlRotation)
-{
-	Owner->bUseControllerRotationYaw = bInControlRotation;
-	UCharacterMovementComponent* MovementComp = Cast<UCharacterMovementComponent>(Owner->GetMovementComponent());
-	if (IsValid(MovementComp))
-		MovementComp->bOrientRotationToMovement = !bInControlRotation;
-}
-
 void ULockOnComponent::AttachWidgetToTarget()
 {
 	if (!IsValid(LockOnWidgetClass) || !IsValid(TargetActor))
@@ -292,9 +271,41 @@ void ULockOnComponent::SetTarget(AActor* InTargetActor)
 	TargetActor = InTargetActor;
 	bIsLockOn = true;
 
-	if (bControlRotation)
-		ControlRotation(true);
+	ControlRotation(true);
 	if (Controller && bIgnoreLookInput)
 		Controller->SetIgnoreLookInput(true);
 	AttachWidgetToTarget();
+}
+
+void ULockOnComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME_CONDITION(ULockOnComponent, bControlRotation, COND_SkipReplay)
+}
+
+void ULockOnComponent::ControlRotation(const bool bInControlRotation)
+{
+	if (!IsValid(Owner) || !Owner->IsLocallyControlled())
+		return;
+
+	ServerControlRotation(bInControlRotation);
+}
+
+void ULockOnComponent::ServerControlRotation_Implementation(const bool bInControlRotation)
+{
+	bControlRotation = bInControlRotation;
+	OnRep_ControlRotation();
+}
+
+// 늦은 조인 시 OnRep이 BeginPlay보다 일찍 실행될 수 있음
+void ULockOnComponent::OnRep_ControlRotation()
+{
+	if (!IsValid(Owner))
+		return;
+
+	Owner->bUseControllerRotationYaw = bControlRotation;
+	UCharacterMovementComponent* MovementComp = Cast<UCharacterMovementComponent>(Owner->GetMovementComponent());
+	if (IsValid(MovementComp))
+		MovementComp->bOrientRotationToMovement = !bControlRotation;
 }

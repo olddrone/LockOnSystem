@@ -40,14 +40,6 @@ private:
 
 	bool CheckTargetOutOfSight() const;
 
-	UFUNCTION()
-	void ControlRotation(const bool bInControlRotation);
-
-	UFUNCTION(Server, Unreliable)
-	void ServerControlRotation(const bool bInControlRotation);
-
-	UFUNCTION(NetMulticast, Unreliable)
-	void MulticastControlRotation(const bool bInControlRotation);
 
 	void AttachWidgetToTarget();
 
@@ -106,8 +98,6 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Setting", meta = (AllowPrivateAccess = "true"))
 	float RotateInterpSpeed = 9.f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Setting", meta = (AllowPrivateAccess = "true"))
-	bool bControlRotation = true;
 
 // 틱에서 타겟과 오너 사이에 장애물 검사 관련
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Info", meta = (AllowPrivateAccess = "true"))
@@ -144,4 +134,22 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Setting", meta = (AllowPrivateAccess = "true"))
 	float ChangeCooldown = 0.5f;
 
+
+	// 시도
+protected:
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	UFUNCTION()
+	void OnRep_ControlRotation();
+
+private:
+	UFUNCTION()
+	void ControlRotation(const bool bInControlRotation);
+
+	UFUNCTION(Server, Reliable)
+	void ServerControlRotation(const bool bInControlRotation);
+
+private:
+	UPROPERTY(ReplicatedUsing = OnRep_ControlRotation, Transient, VisibleInstanceOnly)
+	bool bControlRotation = false;
 };
