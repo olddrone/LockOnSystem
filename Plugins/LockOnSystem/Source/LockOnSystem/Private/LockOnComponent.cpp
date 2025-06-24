@@ -94,6 +94,7 @@ void ULockOnComponent::SweepPhase()
 	const FQuat Rotation = FRotationMatrix::MakeFromZ(CamForward).ToQuat();
 
 	TArray<FOverlapResult> OutHits;
+	// 기본 설정 Ignore, 락온할 액터만 Block으로
 	const bool bResult = GetWorld()->OverlapMultiByChannel(OutHits, Center, Rotation, 
 		ECC_GameTraceChannel1, FCollisionShape::MakeCapsule(Radius, HalfHeight), Params);
 
@@ -113,8 +114,10 @@ void ULockOnComponent::LinePhase()
 	for (AActor* Actor : HitActors) {
 		const FVector_NetQuantize Start = Owner->GetActorLocation();
 		const FVector_NetQuantize End = Actor->GetActorLocation();
+
 		FHitResult HitResult;
-		GetWorld()->LineTraceSingleByChannel(HitResult, Start, End, ECC_GameTraceChannel1, Params);
+		// 기본 설정 Block, 
+		GetWorld()->LineTraceSingleByChannel(HitResult, Start, End, ECC_GameTraceChannel2, Params);
 		if (HitResult.GetActor() != Actor)
 			ToRemove.Add(Actor);
 		else
@@ -189,12 +192,11 @@ bool ULockOnComponent::CheckTargetOutOfSight() const
 
 	// 타겟 -> 오너(플레이어), 반대로 쏴야
 	// 타겟 --- (다른 플레이어) --- (오너) 형태도 정상 작동을 위한 Multi
-	FCollisionQueryParams Param;
-	Param.AddIgnoredActor(TargetActor);
 	TArray<FHitResult> HitResults;
-	GetWorld()->LineTraceMultiByChannel(HitResults, Start, End, ECC_Visibility, Param);
+	// 타겟은 Visibility 채널 Ignore
+	GetWorld()->LineTraceMultiByChannel(HitResults, Start, End, ECC_Visibility);
 	
-	// 플레이어의 Visibility 채널은 오버랩으로 해야 막히지 않고 뚫고 감
+	// 플레이어의 Visibility 채널은 overlap으로 해야 막히지 않고 뚫고 감
 	for (const FHitResult& Hit : HitResults) {
 		if (Hit.GetActor() == Owner)
 			return false;
